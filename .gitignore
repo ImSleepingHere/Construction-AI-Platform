@@ -179,3 +179,45 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# ---- Project-specific ----
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker persistent volumes (in case you ever bind-mount)
+postgres_data/
+redis_data/
+
+# Application uploads / generated files
+uploads/
+outputs/
+generated_documents/
+
+# Local databases (SQLite scratch, dumps, etc.)
+*.sqlite
+*.db
+*.sql.bak
+
+# Environment variants (the base template only lists .env)
+.env.local
+.env.*.local
+*.env
+!.env.example
+
+# Logs
+logs/
+
+# Alembic — keep migrations, ignore compiled cache
+backend/alembic/__pycache__/
+
+# Large data files — keep the primary dump, exclude backups and derivatives
+data/*.sql.bak
+data/
