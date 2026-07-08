@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+
+from app.api import projects, suppliers
 from app.core.config import settings
 
 app = FastAPI(
@@ -6,6 +8,9 @@ app = FastAPI(
     description="AI-powered construction project management platform",
     version="0.1.0",
 )
+
+app.include_router(projects.router)
+app.include_router(suppliers.router)
 
 
 @app.get("/health")
