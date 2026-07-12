@@ -130,12 +130,11 @@ def analyze_meeting(
     prompt = _build_prompt(notes_text, meta)
 
     # 2. Call LLM with strict schema
-    schema = MeetingAnalysis.model_json_schema()
     call_start = time.perf_counter()
     result = llm.generate(
         prompt=prompt,
         system_instruction=SYSTEM_INSTRUCTION,
-        response_schema=schema,
+        response_schema=MeetingAnalysis,
         temperature=0.2,
     )
     total_latency_ms = int((time.perf_counter() - call_start) * 1000)

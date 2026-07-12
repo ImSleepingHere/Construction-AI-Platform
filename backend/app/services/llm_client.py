@@ -54,7 +54,7 @@ class LLMClient(ABC):
         *,
         model: str | None = None,
         system_instruction: str | None = None,
-        response_schema: dict | None = None,
+        response_schema: Any = None,
         temperature: float = 0.2,
         max_output_tokens: int | None = None,
     ) -> LLMResult:
