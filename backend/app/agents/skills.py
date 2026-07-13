@@ -92,10 +92,16 @@ def load_skill(path: str | Path) -> Skill:
     if missing:
         raise ValueError(f"{path}: missing required frontmatter fields: {missing}")
 
-    grounding = meta.get("grounding", "lenient")
+    # Guard against YAML 1.1 booleanization: `off` and `on` become False/True.
+    grounding_raw = meta.get("grounding", "lenient")
+    if isinstance(grounding_raw, bool):
+        grounding = "off" if grounding_raw is False else "on"
+    else:
+        grounding = str(grounding_raw).lower()
     if grounding not in VALID_GROUNDING_MODES:
         raise ValueError(
-            f"{path}: grounding must be one of {VALID_GROUNDING_MODES}, got {grounding!r}"
+            f"{path}: grounding must be one of {VALID_GROUNDING_MODES}, "
+            f"got {grounding_raw!r}. Tip: quote bare words like 'off' in YAML."
         )
 
     max_turns = int(meta.get("max_turns", 1))
