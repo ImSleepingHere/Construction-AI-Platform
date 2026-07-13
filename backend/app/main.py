@@ -4,6 +4,7 @@ from app.api import projects, suppliers
 from app.core.config import settings
 from app.api import ai_debug
 from app.api import meetings
+from app.api import agents
 
 
 app = FastAPI(
@@ -16,6 +17,7 @@ app.include_router(projects.router)
 app.include_router(suppliers.router)
 app.include_router(ai_debug.router)
 app.include_router(meetings.router)
+app.include_router(agents.router)
 
 @app.get("/health")
 def health():
