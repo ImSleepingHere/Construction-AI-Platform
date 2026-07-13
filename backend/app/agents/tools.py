@@ -80,10 +80,33 @@ _TYPE_MAP = {
 
 
 def _python_type_to_json_type(py_type: Any) -> str:
-    origin = getattr(py_type, "__origin__", None)
-    if origin is not None:
-        return _TYPE_MAP.get(origin, "string")
-    return _TYPE_MAP.get(py_type, "string")
+    """Map a Python type hint to a JSON Schema type string.
+
+    Handles Optional[X] (== Union[X, None]) by unwrapping to X. Lists become
+    arrays. Anything unrecognized falls back to string.
+    """
+    import types
+    import typing
+
+    origin = typing.get_origin(py_type)
+    args = typing.get_args(py_type)
+
+    # Optional[X] and X | None: unwrap to X.
+    if origin is typing.Union or origin is getattr(types, "UnionType", None):
+        non_none = [a for a in args if a is not type(None)]
+        if len(non_none) == 1:
+            return _python_type_to_json_type(non_none[0])
+        return "string"
+
+    if origin is list:
+        return "array"
+    if origin is dict:
+        return "object"
+
+    if isinstance(py_type, type):
+        return _TYPE_MAP.get(py_type, "string")
+
+    return "string"
 
 
 # --- The decorator ---
@@ -116,21 +139,21 @@ def tool(
         llm_param_names: list[str] = []
 
         for param_name, param in sig.parameters.items():
-            # Framework-injected params are not exposed to the LLM
             if param_name == "db":
                 continue
 
             hint = hints.get(param_name, str)
             json_type = _python_type_to_json_type(hint)
 
-            properties[param_name] = {"type": json_type}
+            # Gemini's function-declaration schema requires UPPERCASE type names.
+            properties[param_name] = {"type": json_type.upper()}
             llm_param_names.append(param_name)
 
             if param.default is inspect.Parameter.empty:
                 required.append(param_name)
 
         parameters_schema = {
-            "type": "object",
+            "type": "OBJECT",
             "properties": properties,
             "required": required,
         }
