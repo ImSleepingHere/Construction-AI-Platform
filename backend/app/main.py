@@ -5,6 +5,7 @@ from app.core.config import settings
 from app.api import ai_debug
 from app.api import meetings
 from app.api import agents
+from app.services.scheduler import scheduler
 
 
 app = FastAPI(
@@ -18,6 +19,16 @@ app.include_router(suppliers.router)
 app.include_router(ai_debug.router)
 app.include_router(meetings.router)
 app.include_router(agents.router)
+
+
+@app.on_event("startup")
+def _start_scheduler() -> None:
+    scheduler.start()
+
+
+@app.on_event("shutdown")
+def _stop_scheduler() -> None:
+    scheduler.shutdown()
 
 @app.get("/health")
 def health():
