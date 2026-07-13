@@ -50,6 +50,10 @@ class AgentContext:
     # Populated in tool-calling runs.
     tool_call_trace: list[dict[str, Any]] = field(default_factory=list)
     turns_used: int = 0
+    # LLM call budget shared across this run and any subagents it invokes.
+    call_budget: int = 20
+    depth: int = 0        # 0 = top level, 1 = subagent, 2 = sub-subagent
+    max_depth: int = 2
 
     def store_memory(
         self,
@@ -79,6 +83,7 @@ class AgentResult:
     project_id: Optional[int]
     tool_call_trace: list[dict[str, Any]] = field(default_factory=list)
     turns_used: int = 0
+    call_budget_remaining: int = 0
 
 
 class BaseAgent(ABC):
@@ -97,8 +102,22 @@ class BaseAgent(ABC):
 
     # --- Framework-owned run ---
 
-    def run(self, db: Session, input_payload: dict[str, Any]) -> AgentResult:
-        ctx = AgentContext(db=db, input=input_payload)
+    def run(
+        self,
+        db: Session,
+        input_payload: dict[str, Any],
+        *,
+        call_budget: int = 20,
+        depth: int = 0,
+        max_depth: int = 2,
+    ) -> AgentResult:
+        ctx = AgentContext(
+            db=db,
+            input=input_payload,
+            call_budget=call_budget,
+            depth=depth,
+            max_depth=max_depth,
+        )
 
         try:
             ctx.prompt = self.prepare_input(ctx)
@@ -122,7 +141,23 @@ class BaseAgent(ABC):
 
     # --- Single-turn mode ---
 
+    def _consume_budget(self, ctx: AgentContext) -> Optional[AgentResult]:
+        """Check and decrement call_budget before an LLM call.
+
+        Checked before decrementing so a budget of N permits exactly N calls
+        (the alternative order would let a budget of 1 permit zero calls).
+        """
+        if ctx.call_budget <= 0:
+            return self._write_audit_and_return(
+                ctx, output=None, error="Agent budget exhausted", raise_after=False
+            )
+        ctx.call_budget -= 1
+        return None
+
     def _run_single_turn(self, ctx: AgentContext) -> AgentResult:
+        budget_error = self._consume_budget(ctx)
+        if budget_error is not None:
+            return budget_error
         call_start = time.perf_counter()
         try:
             result = self.llm.generate(
@@ -154,6 +189,9 @@ class BaseAgent(ABC):
 
         for turn in range(1, self.skill.max_turns + 1):
             ctx.turns_used = turn
+            budget_error = self._consume_budget(ctx)
+            if budget_error is not None:
+                return budget_error
             call_start = time.perf_counter()
             try:
                 # Intermediate turns: tools enabled, no schema.
@@ -254,7 +292,7 @@ class BaseAgent(ABC):
                         tool_output: Any = {"error": f"unknown tool {tc.name!r}"}
                     else:
                         td = tool_registry.get(tc.name)
-                        tool_output = execute_tool(td, ctx.db, tc.arguments)
+                        tool_output = execute_tool(td, ctx.db, tc.arguments, context=ctx)
                     error_str = None
                 except Exception as exc:
                     tool_output = {"error": f"{type(exc).__name__}: {exc}"}
@@ -316,6 +354,7 @@ class BaseAgent(ABC):
                 project_id=ctx.project_id,
                 tool_call_trace=ctx.tool_call_trace,
                 turns_used=ctx.turns_used,
+                call_budget_remaining=ctx.call_budget,
             )
 
         try:
@@ -338,6 +377,7 @@ class BaseAgent(ABC):
             project_id=ctx.project_id,
             tool_call_trace=ctx.tool_call_trace,
             turns_used=ctx.turns_used,
+            call_budget_remaining=ctx.call_budget,
         )
 
     def _write_audit_log(
@@ -364,6 +404,8 @@ class BaseAgent(ABC):
                 "skill_version": self.skill.version,
                 "turns_used": ctx.turns_used,
                 "tool_call_trace": ctx.tool_call_trace,
+                "depth": ctx.depth,
+                "call_budget_remaining": ctx.call_budget,
             },
         )
         ctx.db.add(row)
@@ -415,6 +457,7 @@ class BaseAgent(ABC):
             project_id=ctx.project_id,
             tool_call_trace=ctx.tool_call_trace,
             turns_used=ctx.turns_used,
+            call_budget_remaining=ctx.call_budget,
         )
 
 

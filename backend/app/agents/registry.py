@@ -5,6 +5,12 @@ contains both SKILL.md and agent.py. Its agent.py is imported and scanned for
 a single BaseAgent subclass, which is registered under the skill's `name`
 (from SKILL.md frontmatter, not the folder name).
 
+After discovery, every agent is also registered as a subagent tool in the
+global ToolRegistry, so any agent can declare another agent's skill name in
+its own SKILL.md `tools:` list and call it mid-loop. Budget and depth are
+threaded through AgentContext -> subagent tool closure -> child run() -> back
+into the parent's ctx.call_budget, so the whole call tree shares one budget.
+
 Discovery runs once, lazily, on first access.
 """
 
@@ -13,8 +19,12 @@ from __future__ import annotations
 import importlib
 import inspect
 from pathlib import Path
+from typing import Any
 
-from app.agents.base import BaseAgent
+from sqlalchemy.orm import Session
+
+from app.agents.base import AgentContext, BaseAgent
+from app.agents.tools import ToolDefinition, registry as tool_registry
 
 _AGENTS_DIR = Path(__file__).parent
 
@@ -60,6 +70,52 @@ def _discover() -> None:
                 f"collision from {entry.name}"
             )
         _agents[skill_name] = instance
+
+    _register_subagent_tools()
+
+
+def _make_subagent_tool(skill_name: str, agent: BaseAgent) -> ToolDefinition:
+    def _call_subagent(db: Session, ctx: AgentContext, input: dict[str, Any]) -> dict[str, Any]:
+        new_depth = ctx.depth + 1
+        if new_depth > ctx.max_depth:
+            return {"error": "Max subagent depth exceeded"}
+
+        result = agent.run(
+            db,
+            input,
+            call_budget=ctx.call_budget,
+            depth=new_depth,
+            max_depth=ctx.max_depth,
+        )
+        # Propagate whatever the subagent spent back into the parent's budget.
+        ctx.call_budget = result.call_budget_remaining
+
+        if not result.output_valid:
+            return {
+                "error": result.error or "Subagent run failed",
+                "audit_log_id": result.audit_log_id,
+            }
+        return result.output.model_dump()
+
+    return ToolDefinition(
+        name=skill_name,
+        description=agent.skill.description,
+        func=_call_subagent,
+        parameters_schema={
+            "type": "OBJECT",
+            "properties": {"input": {"type": "OBJECT"}},
+            "required": ["input"],
+        },
+        llm_param_names=["input"],
+        context_param="ctx",
+    )
+
+
+def _register_subagent_tools() -> None:
+    for skill_name, agent in _agents.items():
+        if tool_registry.has(skill_name):
+            continue  # a plain @tool already claims this name; don't shadow it
+        tool_registry.register(_make_subagent_tool(skill_name, agent))
 
 
 def get_agent(skill_name: str) -> BaseAgent:

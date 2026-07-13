@@ -31,6 +31,9 @@ class ToolDefinition:
     parameters_schema: dict[str, Any]
     # LLM-facing param names (excludes `db` which is framework-injected)
     llm_param_names: list[str] = field(default_factory=list)
+    # If set, the framework injects the calling AgentContext under this kwarg
+    # name (used by subagent tools, which need budget/depth from the caller).
+    context_param: str | None = None
 
 
 class ToolRegistry:
@@ -179,12 +182,20 @@ def execute_tool(
     tool_def: ToolDefinition,
     db: Session,
     arguments: dict[str, Any],
+    *,
+    context: Any = None,
 ) -> Any:
     """Execute a registered tool with LLM-supplied arguments.
 
     Filters out any args the LLM sent that the tool doesn't accept. Missing
     required args raise TypeError, which the framework converts into a
     tool-error result the LLM can see and correct.
+
+    If the tool declares a context_param (subagent tools do, to read/update
+    call_budget and depth), the caller's AgentContext is injected under that
+    kwarg name.
     """
     filtered = {k: v for k, v in arguments.items() if k in tool_def.llm_param_names}
+    if tool_def.context_param:
+        filtered[tool_def.context_param] = context
     return tool_def.func(db, **filtered)
