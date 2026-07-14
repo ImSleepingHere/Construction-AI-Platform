@@ -29,6 +29,8 @@ class SupplierRead(BaseModel):
     category: str
     city: str
     status: str
+    po_count: int = 0
+    on_time_rate: Optional[float] = None
 
 
 class DecisionRead(BaseModel):
