@@ -8,6 +8,8 @@ from app.api import agents
 from app.api import approvals
 from app.api import audit_logs
 from app.api import chat
+from app.api import meetings
+from app.api import memories
 from app.api import metrics
 from app.services.scheduler import scheduler
 
@@ -35,6 +37,8 @@ app.include_router(agents.router)
 app.include_router(approvals.router)
 app.include_router(audit_logs.router)
 app.include_router(chat.router)
+app.include_router(meetings.router)
+app.include_router(memories.router)
 app.include_router(metrics.router)
 
 
