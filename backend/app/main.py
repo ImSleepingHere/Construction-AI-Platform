@@ -5,6 +5,7 @@ from app.core.config import settings
 from app.api import ai_debug
 from app.api import agents
 from app.api import approvals
+from app.api import chat
 from app.services.scheduler import scheduler
 
 
@@ -19,6 +20,7 @@ app.include_router(suppliers.router)
 app.include_router(ai_debug.router)
 app.include_router(agents.router)
 app.include_router(approvals.router)
+app.include_router(chat.router)
 
 
 @app.on_event("startup")
