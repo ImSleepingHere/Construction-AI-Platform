@@ -277,6 +277,8 @@ export interface Supplier {
   category: string;
   city: string;
   status: string;
+  po_count: number;
+  on_time_rate: number | null;
 }
 
 export interface ProjectDecision {
