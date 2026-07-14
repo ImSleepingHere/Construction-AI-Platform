@@ -1,6 +1,10 @@
 # Construction AI Platform
 
-AI-powered construction project management platform. Capstone project.
+An AI agent framework for construction project management: three
+Gemini-powered agents (meeting intelligence, supplier risk analysis,
+executive weekly reporting) that ground every claim in real project data
+via tool-calling, hybrid semantic search, and a full audit trail. Capstone
+project.
 
 ## Stack
 

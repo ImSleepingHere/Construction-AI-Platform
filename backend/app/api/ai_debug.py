@@ -1,4 +1,10 @@
-"""Temporary debug endpoints for verifying LLM wiring. Remove before submission."""
+"""DEBUG-ONLY: raw passthrough to the LLM client, bypassing the agent
+framework entirely (no SKILL.md, no schema validation, no audit log row).
+
+Kept intentionally for diagnosing LLM/API-key connectivity independent of
+the agent framework -- not part of the platform's actual surface and not
+used anywhere in DEMO_GUIDE.md. See docs/API.md's Debug section.
+"""
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
