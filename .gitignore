@@ -222,3 +222,26 @@ backend/alembic/__pycache__/
 # and the redundant full_dump.sql (postgres.sql is the one actually used)
 data/*.sql.bak
 data/construction_ai_dataset_full_dump.sql
+
+# Node.js / pnpm
+frontend/node_modules/
+frontend/.next/
+frontend/.turbo/
+frontend/out/
+frontend/build/
+frontend/dist/
+frontend/.pnpm-store/
+frontend/pnpm-debug.log*
+frontend/pnpm-lock.yaml.bak
+
+# Any pnpm-store anywhere
+.pnpm-store/
+node_modules/
+.next/
+.turbo/
+
+# The Python packaging "lib/" rule above (for build artifacts) is a bare
+# pattern, so it also matches frontend/src/lib/ -- that's real source code
+# (api.ts, types.ts), not a build artifact. Un-ignore it explicitly.
+!frontend/src/lib/
+!frontend/src/lib/**
