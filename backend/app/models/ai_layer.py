@@ -50,6 +50,11 @@ class AIMemory(Base):
     source_reference: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     confidence: Mapped[float] = mapped_column(nullable=False, default=0.0)
     extracted_by: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Nullable: older rows predate semantic search and are skipped by it,
+    # falling back to keyword-only matching until backfilled.
+    embedding: Mapped[Optional[list[float]]] = mapped_column(
+        Vector(EMBEDDING_DIM), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
