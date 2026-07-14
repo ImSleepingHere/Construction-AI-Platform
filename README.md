@@ -67,6 +67,19 @@ that, `docker compose up -d` / `make dev` is all you need day to day.
 Follow [DEMO_GUIDE.md](DEMO_GUIDE.md) for a guided walkthrough with real
 project/supplier ids once setup is done.
 
+### Frontend
+
+A Next.js frontend lives in `frontend/` and talks to the API above. With
+the backend running:
+
+```bash
+docker compose up -d --build frontend
+```
+
+Then open [http://localhost:3000](http://localhost:3000). See
+[frontend/README.md](frontend/README.md) for the page inventory, dev
+commands, and conventions.
+
 
 ## Project Structure:
 
@@ -88,6 +101,12 @@ construction-ai-platform/
 │   ├── tests/
 │   ├── Dockerfile
 │   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── app/          # routes (App Router)
+│   │   ├── components/
+│   │   └── lib/          # api.ts (typed client), types.ts, format.ts
+│   └── Dockerfile
 ├── data/
 ├── docker/
 ├── scripts/

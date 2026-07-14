@@ -31,6 +31,7 @@ export default async function ProjectDetailPage({
 }) {
   const { id } = await params;
   const projectId = Number(id);
+  if (!Number.isInteger(projectId) || projectId < 1) notFound();
 
   let project;
   try {

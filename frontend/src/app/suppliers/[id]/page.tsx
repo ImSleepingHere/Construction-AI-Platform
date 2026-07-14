@@ -24,6 +24,7 @@ export default async function SupplierDetailPage({
 }) {
   const { id } = await params;
   const supplierId = Number(id);
+  if (!Number.isInteger(supplierId) || supplierId < 1) notFound();
 
   let supplier;
   try {
