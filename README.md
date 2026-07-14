@@ -52,6 +52,15 @@ construction-ai-platform/
 - Supplier Risk Analysis
 - Executive Weekly Report
 
+## Documentation
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system design, agent
+  framework internals, data model, design decisions, rubric alignment
+- [docs/API.md](docs/API.md) — endpoint reference with examples
+- [DEMO_GUIDE.md](DEMO_GUIDE.md) — curated demo walkthrough with real
+  project/supplier ids and copy-pasteable request bodies
+- [NOTES.md](NOTES.md) — development gotchas and environment quirks
+
 ## Adding a new agent
 
 Every agent lives in its own folder under `backend/app/agents/<skill_name>/`
