@@ -3,10 +3,14 @@
 Two operations agents can perform on the ai_memories table via the tool
 registry:
 
-- search_memory: keyword-based retrieval with optional project/category filters.
-  For now this uses ILIKE on content. Once document ingestion is live and we
-  have embeddings on memories, this upgrades to hybrid semantic + keyword.
+- search_memory: hybrid semantic + keyword retrieval with optional
+  project/category filters. Semantic hits (pgvector cosine similarity on
+  ai_memories.embedding) are ranked first, keyword ILIKE hits fill in behind
+  them, deduped by id. Rows with a null embedding (written before the
+  embedding column existed, or if an embed() call failed) are simply absent
+  from the semantic half and can still surface via keyword matching.
 - store_memory: write a memory row from within an agent's tool-calling loop.
+  Computes and stores an embedding for the new row.
 
 Both are exposed as @tool-decorated functions and get auto-registered.
 """
@@ -20,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.agents.tools import tool
 from app.models.ai_layer import AIMemory
+from app.services.llm_client import get_llm_client
 
 
 VALID_CATEGORIES = {
@@ -51,35 +56,62 @@ def search_memory(
     project_id: Optional[int] = None,
     category: Optional[str] = None,
     limit: int = 10,
+    use_semantic: bool = True,
 ) -> list[dict]:
-    """Keyword search over ai_memories.content, with optional filters.
+    """Hybrid semantic + keyword search over ai_memories.
 
     Args:
-        query: Text to match against memory content. Case-insensitive substring.
+        query: Text to match. Embedded for semantic search (if use_semantic)
+               and split into terms for a case-insensitive substring match.
         project_id: If provided, restrict to memories linked to this project.
         category: If provided, restrict to a single memory category.
         limit: Max number of results (1-50).
+        use_semantic: If True (default), run pgvector cosine similarity
+               against ai_memories.embedding and rank those hits first.
+               Falls back to keyword-only if the embed call fails.
     """
     limit = max(1, min(int(limit), 50))
 
-    q = db.query(AIMemory)
+    semantic_rows: list[AIMemory] = []
+    if use_semantic and query and query.strip():
+        try:
+            query_embedding = get_llm_client().embed(query)
+            sq = db.query(AIMemory).filter(AIMemory.embedding.isnot(None))
+            if project_id is not None:
+                sq = sq.filter(AIMemory.project_id == project_id)
+            if category:
+                sq = sq.filter(AIMemory.category == category)
+            semantic_rows = (
+                sq.order_by(AIMemory.embedding.cosine_distance(query_embedding))
+                .limit(limit)
+                .all()
+            )
+        except Exception:
+            # Degrade to keyword-only rather than fail the whole tool call.
+            semantic_rows = []
 
+    kq = db.query(AIMemory)
     if query and query.strip():
         # Simple ILIKE match. Splitting on whitespace lets multi-word queries
         # match memories that contain any of the terms.
         terms = [t for t in query.strip().split() if t]
         if terms:
-            q = q.filter(
+            kq = kq.filter(
                 or_(*[AIMemory.content.ilike(f"%{t}%") for t in terms])
             )
-
     if project_id is not None:
-        q = q.filter(AIMemory.project_id == project_id)
-
+        kq = kq.filter(AIMemory.project_id == project_id)
     if category:
-        q = q.filter(AIMemory.category == category)
+        kq = kq.filter(AIMemory.category == category)
+    keyword_rows = kq.order_by(AIMemory.created_at.desc()).limit(limit).all()
 
-    rows = q.order_by(AIMemory.created_at.desc()).limit(limit).all()
+    seen: set[int] = set()
+    combined: list[AIMemory] = []
+    for r in [*semantic_rows, *keyword_rows]:
+        if r.id not in seen:
+            seen.add(r.id)
+            combined.append(r)
+    combined = combined[:limit]
 
     return [
         {
@@ -90,7 +122,7 @@ def search_memory(
             "project_id": r.project_id,
             "created_at": r.created_at.isoformat() if r.created_at else None,
         }
-        for r in rows
+        for r in combined
     ]
 
 
@@ -128,14 +160,23 @@ def store_memory(
         return {"error": "content must not be empty"}
 
     confidence = max(0.0, min(float(confidence), 1.0))
+    content = content.strip()
+
+    try:
+        embedding = get_llm_client().embed(content)
+    except Exception:
+        # Store without an embedding rather than fail the write; it just
+        # won't surface via semantic search until backfilled.
+        embedding = None
 
     row = AIMemory(
         project_id=project_id,
         category=category,
-        content=content.strip(),
+        content=content,
         source_reference={"type": "tool_call", "tool": "store_memory"},
         confidence=confidence,
         extracted_by="tool_call",
+        embedding=embedding,
     )
     db.add(row)
     db.flush()

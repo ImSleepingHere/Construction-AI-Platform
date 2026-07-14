@@ -466,6 +466,13 @@ class BaseAgent(ABC):
             "audit_log_id": ctx.audit_log_id,
         }
         for pending in ctx._pending_memories:
+            try:
+                embedding = self.llm.embed(pending["content"])
+            except Exception:
+                # Store without an embedding rather than fail on_success; it
+                # just won't surface via semantic search until backfilled.
+                embedding = None
+
             row = AIMemory(
                 project_id=ctx.project_id,
                 category=pending["category"],
@@ -473,6 +480,7 @@ class BaseAgent(ABC):
                 source_reference=pending["source_reference"] or default_source,
                 confidence=pending["confidence"],
                 extracted_by=self.skill.name,
+                embedding=embedding,
             )
             ctx.db.add(row)
             ctx.db.flush()
