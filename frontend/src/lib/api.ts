@@ -2,7 +2,14 @@
  * Typed API client. Every call to the backend goes through here -- no
  * scattered fetch() calls in components/pages.
  *
- * Base URL: NEXT_PUBLIC_API_URL, defaulting to http://localhost:8000.
+ * Two base URLs, because server components run inside the frontend
+ * container (Docker-internal networking) while client components run in
+ * the browser on the host (published-port networking):
+ * - NEXT_PUBLIC_API_URL: browser-facing, defaults to http://localhost:8000.
+ * - API_URL_INTERNAL: server-facing (not NEXT_PUBLIC_, so it never reaches
+ *   the client bundle), defaults to http://api:8000 -- the docker-compose
+ *   service name, resolved via Docker's internal DNS. Falls back to the
+ *   public URL when unset (e.g. running the dev server outside Docker).
  */
 
 import type {
@@ -27,7 +34,9 @@ import type {
   ToolMetric,
 } from "./types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const INTERNAL_API_URL = process.env.API_URL_INTERNAL ?? PUBLIC_API_URL;
+const API_BASE_URL = typeof window === "undefined" ? INTERNAL_API_URL : PUBLIC_API_URL;
 
 export class ApiError extends Error {
   status: number;

@@ -54,6 +54,10 @@ services:
     container_name: construction_ai_frontend
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
+      # Server components run inside this container -- "localhost:8000"
+      # there would mean this container, not the api container. Use the
+      # compose service name instead, resolved via Docker's internal DNS.
+      API_URL_INTERNAL: http://api:8000
     ports:
       - "3000:3000"
     volumes:
