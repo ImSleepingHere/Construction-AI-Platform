@@ -1,42 +1,14 @@
-"""Pydantic schemas for the Meeting Intelligence workflow.
+"""Pydantic schemas for the Meeting Intelligence agent.
 
-The output schema is authoritative — it's what the LLM must match, what we
-validate against, and what the API returns. Change it here and the whole
-pipeline updates.
+The output schema is authoritative — it's what the LLM must match and what
+the framework validates the parsed response against.
 """
 
-from datetime import date as date_type
+from __future__ import annotations
+
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
-
-
-# --- Input ---
-
-
-class AnalyzeMeetingRequest(BaseModel):
-    """Input to the Meeting Intelligence workflow.
-
-    The user either references an existing meeting from the dataset (by id) or
-    supplies raw notes. If both are given, id wins and notes are ignored.
-    """
-
-    meeting_id: Optional[int] = Field(
-        default=None,
-        description="ID of an existing meeting to analyze. If omitted, `notes` is used.",
-    )
-    notes: Optional[str] = Field(
-        default=None,
-        description="Raw meeting notes text. Ignored if meeting_id is provided.",
-        max_length=32000,
-    )
-    project_id: Optional[int] = Field(
-        default=None,
-        description="Project this meeting belongs to. Auto-filled from meeting_id if provided.",
-    )
-
-
-# --- Structured LLM output ---
+from pydantic import BaseModel, Field
 
 
 class ActionItem(BaseModel):
@@ -96,24 +68,3 @@ class MeetingAnalysis(BaseModel):
             "how clear the input was and how much had to be inferred."
         ),
     )
-
-
-# --- Final API response ---
-
-
-class MeetingAnalysisResponse(BaseModel):
-    """What the endpoint returns to the caller."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    meeting_id: Optional[int]
-    project_id: Optional[int]
-    analysis: MeetingAnalysis
-    memory_ids: list[int] = Field(
-        description="Row IDs written to ai_memories as a result of this call."
-    )
-    audit_log_id: int = Field(
-        description="Row ID in ai_audit_logs for this call."
-    )
-    model: str
-    latency_ms: int
