@@ -15,6 +15,7 @@ COPY ./app ./app
 COPY ./alembic ./alembic
 COPY ./scripts ./scripts
 COPY ./alembic.ini ./alembic.ini
+COPY ./pytest.ini ./pytest.ini
 
 EXPOSE 8000
 
