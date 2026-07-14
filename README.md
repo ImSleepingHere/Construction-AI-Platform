@@ -11,11 +11,57 @@ AI-powered construction project management platform. Capstone project.
 
 ## Getting started
 
-Prerequisites: Docker Desktop, Python 3.12, Git.
+Prerequisites: Docker Desktop, Python 3 (for `scripts/verify_setup.py` only
+— everything else runs in Docker), Git.
 
-1. Copy `.env.example` to `.env` and fill in your values (especially `GEMINI_API_KEY`)
-2. `docker compose up --build`
-3. Open http://localhost:8000/docs
+```bash
+# 1. Clone and enter the repo
+git clone <this-repo-url>
+cd Construction-AI-Platform
+
+# 2. Configure environment
+cp .env.example .env
+# edit .env: fill in GEMINI_API_KEY, set APP_SECRET_KEY to any long random string
+
+# 3. Start Postgres, Redis, and the API
+docker compose up -d --build
+
+# 4. Load the dataset (18 tables, ~13,400 rows)
+docker exec -i construction_ai_postgres psql -U construction_ai -d construction_ai \
+  < data/construction_ai_dataset_postgres.sql
+
+# 5. Fix sequence drift left by the bulk SQL import (see data/fix_sequences.sql --
+#    without this, any future insert into a dataset table fails with a
+#    UniqueViolation)
+docker exec -i construction_ai_postgres psql -U construction_ai -d construction_ai \
+  < data/fix_sequences.sql
+
+# 6. Run migrations for the AI-layer tables (ai_memories, ai_audit_logs,
+#    approval_requests, document_chunks) + enable pgvector
+docker exec -e PYTHONPATH=/app construction_ai_api alembic upgrade head
+
+# 7. Ingest generated_documents into document_chunks (emails/reports/minutes
+#    -> chunked + embedded). Takes 15-30 minutes for the full 1,060 docs.
+docker exec -e PYTHONPATH=/app construction_ai_api python /app/scripts/ingest_documents.py --all
+
+# 8. Seed the curated demo narrative (3 anchor projects/suppliers) and
+#    generate DEMO_GUIDE.md
+docker exec -e PYTHONPATH=/app construction_ai_api python /app/scripts/seed_demo_data.py
+mv backend/scripts/DEMO_GUIDE.md DEMO_GUIDE.md
+
+# 9. Verify everything actually works
+python scripts/verify_setup.py
+
+# 10. Open the API
+open http://localhost:8000/docs   # or just visit it in a browser
+```
+
+Steps 4-8 are one-time setup (idempotent to re-run, except step 7 which
+skips already-ingested documents rather than re-embedding them). After
+that, `docker compose up -d` / `make dev` is all you need day to day.
+
+Follow [DEMO_GUIDE.md](DEMO_GUIDE.md) for a guided walkthrough with real
+project/supplier ids once setup is done.
 
 
 ## Project Structure:
