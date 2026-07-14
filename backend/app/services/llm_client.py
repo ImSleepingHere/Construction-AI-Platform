@@ -326,6 +326,10 @@ class GeminiClient(LLMClient):
         response = self._client.models.embed_content(
             model=chosen_model,
             contents=text,
+            # gemini-embedding-001/2 default to 3072-dim (MRL-truncatable).
+            # Must match app.models.ai_layer.EMBEDDING_DIM / the vector(768)
+            # columns on document_chunks and ai_memories.
+            config=genai_types.EmbedContentConfig(output_dimensionality=768),
         )
         return list(response.embeddings[0].values)
 

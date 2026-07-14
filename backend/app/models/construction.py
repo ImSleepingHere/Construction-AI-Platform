@@ -111,3 +111,18 @@ class SafetyEvent(Base):
     severity: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     corrective_action: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class GeneratedDocument(Base):
+    __tablename__ = "generated_documents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    file_name: Mapped[str] = mapped_column(String, nullable=False)
+    type: Mapped[str] = mapped_column(String, nullable=False)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    related_record_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    document_date: Mapped[str] = mapped_column(String, nullable=False)
+    sender: Mapped[str] = mapped_column(String, nullable=False)
+    recipient: Mapped[str] = mapped_column(Text, nullable=False)
+    subject: Mapped[str] = mapped_column(String, nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
