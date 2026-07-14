@@ -30,3 +30,8 @@ class ApprovalRequestPage(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class ReviewRequest(BaseModel):
+    reviewer: str
+    notes: Optional[str] = None

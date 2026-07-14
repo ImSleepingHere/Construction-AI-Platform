@@ -8,7 +8,7 @@ test_base_agent.py. It is the only test in this suite that calls Gemini.
 
 from __future__ import annotations
 
-from app.models.ai_layer import AIAuditLog
+from app.models.ai_layer import AIAuditLog, ApprovalRequest
 
 
 def test_health_returns_200(client):
@@ -91,4 +91,48 @@ def test_list_audit_logs_filters_by_workflow(client, db_session):
 
 def test_get_audit_log_returns_404_for_missing_id(client):
     resp = client.get("/audit-logs/999999")
+    assert resp.status_code == 404
+
+
+def test_approve_request_transitions_pending_to_approved(client, db_session):
+    row = ApprovalRequest(
+        workflow="_test_workflow",
+        action_type="_test_action",
+        payload={"foo": "bar"},
+        reasoning="test reasoning",
+        source_ids=[1, 2],
+    )
+    db_session.add(row)
+    db_session.flush()
+
+    resp = client.post(
+        f"/approvals/{row.id}/approve", json={"reviewer": "pytest", "notes": "looks fine"}
+    )
+    assert resp.status_code == 200
+
+    body = resp.json()
+    assert body["status"] == "approved"
+    assert body["reviewer"] == "pytest"
+    assert body["review_notes"] == "looks fine"
+    assert body["reviewed_at"] is not None
+
+
+def test_approve_request_rejects_already_reviewed_row(client, db_session):
+    row = ApprovalRequest(
+        workflow="_test_workflow",
+        action_type="_test_action",
+        payload={},
+        reasoning="test reasoning",
+        source_ids=[],
+        status="approved",
+    )
+    db_session.add(row)
+    db_session.flush()
+
+    resp = client.post(f"/approvals/{row.id}/approve", json={"reviewer": "pytest"})
+    assert resp.status_code == 409
+
+
+def test_reject_request_returns_404_for_missing_id(client):
+    resp = client.post("/approvals/999999/reject", json={"reviewer": "pytest"})
     assert resp.status_code == 404
