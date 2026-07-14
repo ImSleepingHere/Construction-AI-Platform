@@ -218,6 +218,7 @@ logs/
 # Alembic — keep migrations, ignore compiled cache
 backend/alembic/__pycache__/
 
-# Large data files — keep the primary dump, exclude backups and derivatives
+# Large data files — keep the primary dump + fix script, exclude backups
+# and the redundant full_dump.sql (postgres.sql is the one actually used)
 data/*.sql.bak
-data/
+data/construction_ai_dataset_full_dump.sql
