@@ -22,6 +22,8 @@ app.include_router(agents.router)
 @app.on_event("startup")
 def _start_scheduler() -> None:
     scheduler.start()
+    # Every Monday at 09:00 UTC.
+    scheduler.register_agent_cron("executive_report", "0 9 * * 1", {})
 
 
 @app.on_event("shutdown")
