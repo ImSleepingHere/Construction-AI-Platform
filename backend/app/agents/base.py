@@ -196,6 +196,7 @@ class BaseAgent(ABC):
             try:
                 # Intermediate turns: tools enabled, no schema.
                 # Final turn (last iteration): fall back to schema-only.
+                # (Gemini here can't combine tools + response_schema in one call.)
                 use_tools = turn < self.skill.max_turns
                 result = self.llm.generate(
                     prompt="",  # conversation carries everything
@@ -220,14 +221,59 @@ class BaseAgent(ABC):
             if result.completion_tokens:
                 aggregate_completion_tokens += result.completion_tokens
 
-            # No tool calls => LLM produced its final response.
             if not result.tool_calls:
+                if not use_tools:
+                    # This was the schema-forced final turn: trust it.
+                    ctx.llm_latency_ms = aggregate_latency_ms
+                    ctx.llm_prompt_tokens = aggregate_prompt_tokens or None
+                    ctx.llm_completion_tokens = aggregate_completion_tokens or None
+                    ctx.llm_model = result.model
+                    ctx.llm_output_raw = result.text
+                    return self._finalize(ctx, result.text)
+
+                # The model stopped calling tools before the schema-forced
+                # turn. That call wasn't schema-constrained, so its JSON
+                # shape/escaping isn't trustworthy (observed: wrong field
+                # names, invalid \' escapes). Echo it into history and force
+                # one schema-only call to get a conformant answer.
+                if result.response_content is not None:
+                    conversation.append(result.response_content)
+
+                budget_error = self._consume_budget(ctx)
+                if budget_error is not None:
+                    return budget_error
+                finalize_start = time.perf_counter()
+                try:
+                    final = self.llm.generate(
+                        prompt="",
+                        system_instruction=self.skill.system_prompt,
+                        response_schema=self.output_model,
+                        conversation=conversation,
+                        temperature=0.2,
+                    )
+                except Exception as exc:
+                    ctx.llm_latency_ms = aggregate_latency_ms + int(
+                        (time.perf_counter() - finalize_start) * 1000
+                    )
+                    return self._write_audit_and_return(
+                        ctx,
+                        output=None,
+                        error=f"LLM call failed on finalize: {exc}",
+                        raise_after=False,
+                    )
+
+                aggregate_latency_ms += final.latency_ms
+                if final.prompt_tokens:
+                    aggregate_prompt_tokens += final.prompt_tokens
+                if final.completion_tokens:
+                    aggregate_completion_tokens += final.completion_tokens
+
                 ctx.llm_latency_ms = aggregate_latency_ms
                 ctx.llm_prompt_tokens = aggregate_prompt_tokens or None
                 ctx.llm_completion_tokens = aggregate_completion_tokens or None
-                ctx.llm_model = result.model
-                ctx.llm_output_raw = result.text
-                return self._finalize(ctx, result.text)
+                ctx.llm_model = final.model
+                ctx.llm_output_raw = final.text
+                return self._finalize(ctx, final.text)
 
             # Execute each tool call and append results to conversation.
             self._execute_tool_calls(ctx, result, conversation)

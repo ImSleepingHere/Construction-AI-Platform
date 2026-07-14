@@ -31,6 +31,7 @@ VALID_CATEGORIES = {
     "insight",
     "risk_assessment",
     "trivia_answer",  # smoke test
+    "hello_greeting",  # hello_world reference agent
 }
 
 

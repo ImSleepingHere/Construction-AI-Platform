@@ -11,3 +11,11 @@ class HelloWorldAgent(BaseAgent):
     def prepare_input(self, ctx: AgentContext) -> str:
         name = ctx.input.get("name", "world")
         return f"Name: {name}"
+
+    def on_success(self, ctx: AgentContext, output: HelloOutput) -> None:
+        name = ctx.input.get("name", "world")
+        ctx.store_memory(
+            category="hello_greeting",
+            content=f"Greeted '{name}' with: {output.greeting}",
+            confidence=1.0,
+        )

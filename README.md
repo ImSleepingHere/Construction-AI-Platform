@@ -51,3 +51,27 @@ construction-ai-platform/
 - Meeting Intelligence
 - Supplier Risk Analysis
 - Executive Weekly Report
+
+## Adding a new agent
+
+Every agent lives in its own folder under `backend/app/agents/<skill_name>/`
+and is auto-discovered by `backend/app/agents/registry.py` — no manual
+wiring needed. A folder counts as an agent if it contains both `SKILL.md`
+and `agent.py`.
+
+**`backend/app/agents/hello_world/` is the canonical reference agent.** It
+demonstrates the full pattern:
+
+- `SKILL.md` — YAML frontmatter (name, description, version, max_turns,
+  tools, output_schema, grounding) + a Markdown system prompt as the body
+- `schemas.py` — the Pydantic output model (`HelloOutput`). Avoid
+  `Optional[...] = None` fields in output schemas — this SDK version's
+  structured-output mode rejects `null` in the generated JSON Schema; use
+  `list[int] = Field(default_factory=list)` instead
+- `agent.py` — a `BaseAgent` subclass implementing `prepare_input` (build the
+  prompt from `ctx.input`) and optionally `on_success` (persist memories via
+  `ctx.store_memory(...)`)
+
+Once the folder exists, the agent is live at `POST /agents/<skill_name>`
+(body: `{"input": {...}}`) and listed at `GET /agents` — no route or import
+to add by hand. Copy the `hello_world` folder as your starting point.
