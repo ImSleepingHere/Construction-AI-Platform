@@ -8,6 +8,8 @@ test_base_agent.py. It is the only test in this suite that calls Gemini.
 
 from __future__ import annotations
 
+from app.models.ai_layer import AIAuditLog
+
 
 def test_health_returns_200(client):
     resp = client.get("/health")
@@ -55,3 +57,38 @@ def test_get_approvals_returns_200_with_paginated_list(client):
     for key in ("items", "total", "limit", "offset"):
         assert key in body
     assert isinstance(body["items"], list)
+
+
+def test_list_audit_logs_returns_200_with_paginated_list(client):
+    resp = client.get("/audit-logs")
+    assert resp.status_code == 200
+
+    body = resp.json()
+    for key in ("items", "total", "limit", "offset"):
+        assert key in body
+    assert isinstance(body["items"], list)
+
+
+def test_list_audit_logs_filters_by_workflow(client, db_session):
+    db_session.add(
+        AIAuditLog(
+            workflow="_test_audit_workflow",
+            model="fake-model",
+            prompt="test prompt",
+            output="{}",
+            output_valid=True,
+        )
+    )
+    db_session.flush()
+
+    resp = client.get("/audit-logs", params={"workflow": "_test_audit_workflow"})
+    assert resp.status_code == 200
+
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"][0]["workflow"] == "_test_audit_workflow"
+
+
+def test_get_audit_log_returns_404_for_missing_id(client):
+    resp = client.get("/audit-logs/999999")
+    assert resp.status_code == 404
