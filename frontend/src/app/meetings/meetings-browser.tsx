@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, Upload } from "lucide-react";
 
 import { getMeeting, runAgent } from "@/lib/api";
 import { formatDate } from "@/lib/format";
+import { extractPdfText } from "@/lib/pdf";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -29,7 +30,10 @@ export function MeetingsBrowser({
   const [loadingMeeting, setLoadingMeeting] = useState(false);
   const [notes, setNotes] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
+  const [extractingPdf, setExtractingPdf] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [result, setResult] = useState<AgentRunResponse<MeetingAnalysis> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const projectName = useMemo(() => {
     const map = new Map(projects.map((p) => [p.id, p.project_name]));
@@ -88,6 +92,33 @@ export function MeetingsBrowser({
       toast.error(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setAnalyzing(false);
+    }
+  }
+
+  async function handlePdfSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    if (file.type !== "application/pdf") {
+      toast.error("Please choose a PDF file.");
+      return;
+    }
+
+    setExtractingPdf(true);
+    try {
+      const text = await extractPdfText(file);
+      if (!text) {
+        toast.error("No extractable text found in this PDF (it may be a scanned image).");
+        return;
+      }
+      setNotes(text);
+      setUploadedFileName(file.name);
+      toast.success(`Extracted text from ${file.name}.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not read this PDF.");
+    } finally {
+      setExtractingPdf(false);
     }
   }
 
@@ -157,7 +188,7 @@ export function MeetingsBrowser({
         <Tabs defaultValue="meeting">
           <TabsList>
             <TabsTrigger value="meeting">Selected meeting</TabsTrigger>
-            <TabsTrigger value="notes">Analyze notes</TabsTrigger>
+            <TabsTrigger value="notes">Analyze notes / PDF</TabsTrigger>
           </TabsList>
 
           <TabsContent value="meeting" className="mt-4 flex flex-col gap-4">
@@ -200,8 +231,36 @@ export function MeetingsBrowser({
           </TabsContent>
 
           <TabsContent value="notes" className="mt-4 flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={handlePdfSelected}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={extractingPdf}
+              >
+                {extractingPdf ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Upload className="size-4" />
+                )}
+                Upload meeting PDF
+              </Button>
+              {uploadedFileName && (
+                <span className="text-xs text-muted-foreground">
+                  Extracted from {uploadedFileName} — edit below before analyzing if needed.
+                </span>
+              )}
+            </div>
+
             <Textarea
-              placeholder="Paste raw meeting notes here…"
+              placeholder="Paste raw meeting notes here, or upload a PDF above…"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={8}
