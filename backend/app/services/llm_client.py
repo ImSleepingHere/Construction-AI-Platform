@@ -20,11 +20,33 @@ from enum import Enum
 from typing import Any, Optional
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types as genai_types
 from pydantic import BaseModel
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from app.core.config import settings
+
+
+def _is_transient_llm_error(exc: BaseException) -> bool:
+    """True for errors worth retrying: 5xx (server overload) and 429 (rate limit).
+
+    Anything else (bad request, auth, malformed schema) fails fast on the
+    first attempt instead of burning the full retry budget.
+    """
+    if isinstance(exc, genai_errors.ServerError):
+        return True
+    if isinstance(exc, genai_errors.ClientError) and getattr(exc, "code", None) == 429:
+        return True
+    return False
+
+
+_llm_retry = retry(
+    retry=retry_if_exception(_is_transient_llm_error),
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=1, min=2, max=20),
+    reraise=True,
+)
 
 
 _JSON_TYPE_TO_GEMINI = {
@@ -210,11 +232,7 @@ class GeminiClient(LLMClient):
             default_embedding_model or settings.GEMINI_EMBEDDING_MODEL
         )
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=8),
-        reraise=True,
-    )
+    @_llm_retry
     def generate(
         self,
         prompt: str,
@@ -316,11 +334,7 @@ class GeminiClient(LLMClient):
             response_content=response_content,
         )
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=8),
-        reraise=True,
-    )
+    @_llm_retry
     def embed(self, text: str, *, model: Optional[str] = None) -> list[float]:
         chosen_model = model or self._default_embedding_model
         response = self._client.models.embed_content(
